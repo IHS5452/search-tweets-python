@@ -7,6 +7,10 @@ import argparse
 import json
 import sys
 import logging
+import csv
+import json
+from pathlib import Path
+
 from searchtweets import (ResultStream,
                           load_credentials,
                           merge_dicts,
@@ -137,12 +141,51 @@ def parse_cmd_args():
                            action="store_true",
                            default=False,
                            help="print all info and warning messages")
+    
+    argparser.add_argument("--export",
+                           choices=["csv","json","both"],
+                           default=None,
+                           help="Exports tweets to csv, json, or both formats")
+    
+    
+    argparser.add_argument("--filename",
+                           dest="output_filename",
+                           default="tweets_output",
+                           help="Base name for exported CSV/JSON files (Please do not put an extension)")
+
+
     return argparser
 
 
 def _filter_sensitive_args(dict_):
     sens_args = ("password", "consumer_key", "consumer_secret", "bearer_token")
     return {k: v for k, v in dict_.items() if k not in sens_args}
+
+
+
+
+def save_to_csv(tweets, filename="tweets_output.csv"):
+    if not tweets:
+        print("No tweets to save.")
+        return
+
+    keys = tweets[0].keys()
+    with open(filename, "w", newline='', encoding="utf-8") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(tweets)
+    print(f"Saved {len(tweets)} tweets to {filename}")
+
+def save_to_json(tweets, filename="tweets_output.json"):
+    if not tweets:
+        print("No tweets to save.")
+        return
+
+    with open(filename, "w", encoding="utf-8") as jsonfile:
+        json.dump(tweets, jsonfile, ensure_ascii=False, indent=2)
+    print(f"Saved {len(tweets)} tweets to {filename}")
+
+
 
 def main():
     args_dict = vars(parse_cmd_args().parse_args())
@@ -151,6 +194,7 @@ def main():
         logger.debug("command line args dict:")
         logger.debug(json.dumps(args_dict, indent=4))
 
+    
     if args_dict.get("config_filename") is not None:
         configfile_dict = read_config(args_dict["config_filename"])
     else:
@@ -202,6 +246,23 @@ def main():
         for tweet in stream:
             print(json.dumps(tweet))
 
+
+
+    all_tweets = []
+
+    if config_dict["print_stream"]:
+        for tweet in stream:
+            print(json.dumps(tweet))
+            all_tweets.append(tweet)
+
+    export_type = config_dict.get("export")
+    output_base = config_dict.get("output_filename", "tweets_output")
+
+    if export_type and all_tweets:
+        if export_type in ("csv", "both"):
+            save_to_csv(all_tweets, f"{output_base}.csv")
+        if export_type in ("json", "both"):
+            save_to_json(all_tweets, f"{output_base}.json")
 
 if __name__ == '__main__':
     main()
